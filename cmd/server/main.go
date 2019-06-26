@@ -1,12 +1,19 @@
 package main
 
-import "github.com/wtask/chat/pkg/semver"
+import (
+	stdlog "log"
+	"os"
+)
 
-var (
-	// Version - application version fingerprint
-	Version = semver.V{Minor: 1, PreRelease: "prototype"}.String()
+type (
+	// Logger - logging interface used by the server
+	Logger interface {
+		Println(v ...interface{})
+		Printf(format string, v ...interface{})
+	}
 )
 
 func main() {
-
+	var log Logger = stdlog.New(os.Stdout, BinaryName+":"+Version+" ", stdlog.Ldate|stdlog.Ltime)
+	log.Printf("Starting with config: %+v", Config)
 }
