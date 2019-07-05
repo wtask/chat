@@ -10,6 +10,7 @@ type Scope struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 	scope     sync.WaitGroup
+	// TODO Add scope-member counter for stat purposes
 }
 
 // NewScope - concurrency scope builder
