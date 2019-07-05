@@ -79,7 +79,7 @@ func ExampleScope() {
 	// DATA-1 *CONSUMER* done
 }
 
-func ExampleScopeSeveralMembers() {
+func ExampleScope_severalMembers() {
 	data := make(chan int)
 
 	scope, cancel := NewScope()
@@ -98,4 +98,15 @@ func ExampleScopeSeveralMembers() {
 	// *PRODUCER-1* done
 	// *PRODUCER-2* done
 	// *PRODUCER-3* done
+}
+
+func ExampleScope_Expired() {
+	scope1, cancel1 := NewScope()
+	defer cancel1()
+	scope2, cancel2 := NewScope()
+	cancel2()
+	fmt.Println(scope1.Expired(), scope2.Expired())
+
+	// Output:
+	// false true
 }

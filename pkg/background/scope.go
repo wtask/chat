@@ -16,31 +16,44 @@ type Scope struct {
 // NewScope - concurrency scope builder
 func NewScope() (scope *Scope, cancel func()) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	b := &Scope{
+	s := &Scope{
 		ctx:       ctx,
 		ctxCancel: cancelFunc,
 		scope:     sync.WaitGroup{},
 	}
-	return b,
+	return s,
 		func() {
-			b.ctxCancel()
-			b.scope.Wait()
+			if s.Expired() {
+				return
+			}
+			s.ctxCancel()
+			s.scope.Wait()
 		}
 }
 
-// Context - return background context
+// Context - returns background context
 func (s *Scope) Context() context.Context {
 	return s.ctx
 }
 
-// Add - notifies scope to register processes/workers/layers.
+// Add - notify the scope to register processes/workers/layers.
 // Based on sync.WaitGroup.
 func (s *Scope) Add(delta int) {
 	s.scope.Add(delta)
 }
 
-// Done - notifies scope when process/worker/layer is done.
+// Done - notify the scope when process/worker/layer is done.
 // Based on sync.WaitGroup.
 func (s *Scope) Done() {
 	s.scope.Done()
+}
+
+// Expired - indicates current state of the scope.
+func (s *Scope) Expired() bool {
+	select {
+	case <-s.Context().Done():
+		return true
+	default:
+		return false
+	}
 }
