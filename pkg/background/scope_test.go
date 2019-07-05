@@ -100,13 +100,17 @@ func ExampleScope_severalMembers() {
 	// *PRODUCER-3* done
 }
 
-func ExampleScope_Expired() {
+func ExampleScope_expiredOrActive() {
 	scope1, cancel1 := NewScope()
 	defer cancel1()
 	scope2, cancel2 := NewScope()
 	cancel2()
-	fmt.Println(scope1.Expired(), scope2.Expired())
+	// expired condition is: err != nil, if false than scope is in active state
+	fmt.Println(scope1.Context().Err() != nil, scope2.Context().Err() != nil)
+	// active condition is: err == nil, if false than scope is in expired state
+	fmt.Println(scope1.Context().Err() == nil, scope2.Context().Err() == nil)
 
 	// Output:
 	// false true
+	// true false
 }

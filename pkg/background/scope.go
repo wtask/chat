@@ -23,7 +23,8 @@ func NewScope() (scope *Scope, cancel func()) {
 	}
 	return s,
 		func() {
-			if s.Expired() {
+			if s.Context().Err() != nil {
+				// expired, this cancel function is already done
 				return
 			}
 			s.ctxCancel()
@@ -46,14 +47,4 @@ func (s *Scope) Add(delta int) {
 // Based on sync.WaitGroup.
 func (s *Scope) Done() {
 	s.scope.Done()
-}
-
-// Expired - indicates current state of the scope.
-func (s *Scope) Expired() bool {
-	select {
-	case <-s.Context().Done():
-		return true
-	default:
-		return false
-	}
 }
