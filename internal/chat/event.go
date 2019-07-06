@@ -22,8 +22,8 @@ type partAction int
 
 const (
 	_ partAction = iota
-	actionLeft
-	actionTimeout
+	partActionLeft
+	partActionTimeout
 )
 
 type partEvent struct {
@@ -33,9 +33,9 @@ type partEvent struct {
 
 func (a partAction) String() string {
 	switch {
-	case a == actionLeft:
+	case a == partActionLeft:
 		return "left"
-	case a == actionTimeout:
+	case a == partActionTimeout:
 		return "timeout"
 	default:
 		return "unknown part action"

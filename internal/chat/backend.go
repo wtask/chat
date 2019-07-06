@@ -8,8 +8,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wtask/chat/internal/chat/message"
+
 	"github.com/wtask/chat/pkg/background"
 )
+
+// MessageHistory - the interface for saving and retriving message history.
+type MessageHistory interface {
+	// Push - save message for history
+	Push(msg string)
+	// Tail - peek last several messages from history
+	Tail(n int) []string
+}
 
 // playground - is an abstraction to help join different goroutines by meaning
 type playground struct {
@@ -34,23 +44,26 @@ type Backend struct {
 	join    chan joinEvent
 	part    chan partEvent
 
-	// Playgrounds
-	// super - helps to resolve complex cases with different related playgrounds
-	super *playground
 	// connection playgrounds
-	connAcceptor *playground
-	connWriter   *playground
-	connReader   *playground
+	connAcceptor *playground // ???
+	connWriter   *playground // ???
+	connReader   *playground // ???
 	// event broadcating playgrounds
 	producer  *playground
 	consumer  *playground
 	messenger *playground
+
+	history MessageHistory
 }
 
 // NewBackend - builds new backed for given listener.
-func NewBackend(listener net.Listener) (*Backend, error) {
+func NewBackend(listener net.Listener, history MessageHistory) (*Backend, error) {
 	if listener == nil {
 		return nil, errors.New("chat.NewBackend: net listener is nil")
+	}
+
+	if history == nil {
+		return nil, errors.New("chat.NewBackend: invalid message history implementation (nil)")
 	}
 
 	return &Backend{
@@ -63,8 +76,6 @@ func NewBackend(listener net.Listener) (*Backend, error) {
 		join:    make(chan joinEvent),
 		part:    make(chan partEvent),
 
-		super: newPlayground(),
-
 		connAcceptor: newPlayground(),
 		connWriter:   newPlayground(),
 		connReader:   newPlayground(),
@@ -72,6 +83,8 @@ func NewBackend(listener net.Listener) (*Backend, error) {
 		producer:  newPlayground(),
 		consumer:  newPlayground(),
 		messenger: newPlayground(),
+
+		history: history,
 	}, nil
 }
 
@@ -85,7 +98,6 @@ func (b *Backend) readyToLaunch() bool {
 		b.message != nil &&
 		b.join != nil &&
 		b.part != nil &&
-		b.super != nil &&
 		b.connAcceptor != nil &&
 		b.connWriter != nil &&
 		b.connReader != nil &&
@@ -94,8 +106,12 @@ func (b *Backend) readyToLaunch() bool {
 		b.messenger != nil
 }
 
-// propagateMessage - starts message propagation from author to all clients.
-func (b *Backend) propagateMessage(cause event, msg string) {
+// throwMessage - starts message propagation from author to all clients.
+func (b *Backend) throwMessage(cause event, msg string) {
+	if b.producer.scope.Context().Err() != nil {
+		// expired
+		return
+	}
 	b.producer.scope.Add(1)
 	if cause.eventTime.IsZero() {
 		cause.eventTime = time.Now().UTC()
@@ -109,7 +125,11 @@ func (b *Backend) propagateMessage(cause event, msg string) {
 	}(b.producer.scope)
 }
 
-func (b *Backend) notifyJoin(id identity, outbox chan<- string) {
+func (b *Backend) throwJoin(id identity, outbox chan<- string) {
+	if b.producer.scope.Context().Err() != nil {
+		// expired
+		return
+	}
 	b.producer.scope.Add(1)
 	go func(s *background.Scope) {
 		defer s.Done()
@@ -120,7 +140,11 @@ func (b *Backend) notifyJoin(id identity, outbox chan<- string) {
 	}(b.producer.scope)
 }
 
-func (b *Backend) notifyPart(id identity, action partAction) {
+func (b *Backend) throwPart(id identity, action partAction) {
+	if b.producer.scope.Context().Err() != nil {
+		// expired
+		return
+	}
 	b.producer.scope.Add(1)
 	go func(s *background.Scope) {
 		defer s.Done()
@@ -131,10 +155,12 @@ func (b *Backend) notifyPart(id identity, action partAction) {
 	}(b.producer.scope)
 }
 
-func (b *Backend) sendMessage(outbox chan<- string, msg string) {
-	// NOTE:
-	// We need done-flag to help send consistently if method is calling repeatedly for the same outbox.
+func (b *Backend) sendMessage(outbox chan<- string, msg string) <-chan struct{} {
 	done := make(chan struct{})
+	if b.messenger.scope.Context().Err() != nil {
+		close(done)
+		return done
+	}
 	b.messenger.scope.Add(1)
 	go func(s *background.Scope) {
 		defer func() {
@@ -146,7 +172,7 @@ func (b *Backend) sendMessage(outbox chan<- string, msg string) {
 		case <-s.Context().Done():
 		}
 	}(b.messenger.scope)
-	<-done
+	return done
 }
 
 // Launch - launches chat core in background if no error is returned.
@@ -161,8 +187,10 @@ func (b *Backend) Launch() (shutdown func(), startup error) {
 		return nil, errors.New("server.Backend is not initialized")
 	}
 
-	go b.eventDispatcher()
+	go b.consumeEvents()
 
+	// Backend must be sure all connections has time to close
+	connHolder := newPlayground()
 	b.connAcceptor.scope.Add(1)
 	go func() {
 		defer b.connAcceptor.scope.Done()
@@ -179,14 +207,14 @@ func (b *Backend) Launch() (shutdown func(), startup error) {
 				continue
 			}
 
-			// Wrap connection holder into super scope due to Backend must be sure
-			// that the connection has time to close
-			b.super.scope.Add(1)
+			connHolder.scope.Add(1)
 			go func(s *background.Scope) {
 				defer s.Done()
 				b.holdConnection(conn)
-				// do not block execution here
-			}(b.super.scope)
+				// DO NOT BLOCK execution here!
+				// Otherwise goroutine will wait for scope cancellation
+				// even when connection was closed at client side.
+			}(connHolder.scope)
 		}
 	}()
 
@@ -200,7 +228,7 @@ func (b *Backend) Launch() (shutdown func(), startup error) {
 			b.listener.Close()
 			b.connReader.cancel()
 
-			b.propagateMessage(event{origin: identity("*SYS*")}, "Bye, chat backend is stopping now...")
+			b.throwMessage(event{origin: identity("*SYS*")}, "Bye, chat backend is stopping now...")
 			time.Sleep(50 * time.Microsecond)
 
 			b.producer.cancel()
@@ -208,7 +236,7 @@ func (b *Backend) Launch() (shutdown func(), startup error) {
 			b.messenger.cancel()
 			b.connWriter.cancel()
 
-			b.super.cancel()
+			connHolder.cancel()
 
 			// may to close event channels
 
@@ -231,41 +259,129 @@ func (b *Backend) holdConnection(conn net.Conn) {
 	outbox := make(chan string)
 	go func() {
 		defer wg.Done()
-		b.launchOutbox(clientID, conn, outbox)
+		<-b.upholdOutbox(clientID, conn, outbox)
 	}()
 
-	b.notifyJoin(clientID, outbox)
+	b.throwJoin(clientID, outbox)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		b.launchInbox(clientID, conn)
+		<-b.upholdInbox(clientID, conn)
 	}()
 
 	wg.Wait()
 }
 
-func (b *Backend) launchOutbox(clientID identity, conn net.Conn, outbox <-chan string) {
+func (b *Backend) upholdOutbox(clientID identity, conn net.Conn, outbox <-chan string) <-chan struct{} {
+	done := make(chan struct{})
 	b.connWriter.scope.Add(1)
 	go func(s *background.Scope) {
 		defer func() {
+			close(done)
 			s.Done()
-			// close(outbox) // or forget chan
 		}()
 
+		if s.Context().Err() != nil {
+			return
+		}
+
+		reader := strings.NewReader("")
+		for {
+			select {
+			case msg := <-outbox:
+				reader.Reset(msg)
+			case <-s.Context().Done():
+				return
+			}
+			if reader.Len() == 0 {
+				continue
+			}
+			conn.SetWriteDeadline(time.Now().Add(b.writeTimeout))
+			_, err := reader.WriteTo(conn)
+			if err == nil {
+				continue
+			}
+			netErr, ok := err.(net.Error)
+			switch {
+			case !ok:
+				b.throwPart(clientID, partActionLeft)
+				return
+			case ok && netErr.Timeout():
+				b.throwPart(clientID, partActionTimeout)
+				return
+			case ok && netErr.Temporary():
+				// TODO get msg reminder and append to new msg on next iteration
+				// Also we need count the tryouts
+				b.throwPart(clientID, partActionLeft)
+				return
+			}
+		}
 		// TODO add conn writer code
 	}(b.connWriter.scope)
+	return done
 }
 
-func (b *Backend) launchInbox(clientID identity, conn net.Conn) {
+func (b *Backend) upholdInbox(clientID identity, conn net.Conn) <-chan struct{} {
+	done := make(chan struct{})
 	b.connReader.scope.Add(1)
 	go func(s *background.Scope) {
-		defer s.Done()
-		// TODO add conn reader code
+		defer func() {
+			close(done)
+			s.Done()
+		}()
+
+		if s.Context().Err() != nil {
+			return
+		}
+
+		builder := message.Builder{}
+		max, partial := 2048, 1500
+		buf := make([]byte, max)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			conn.SetReadDeadline(time.Now().Add(b.readTimeout))
+			n, err := conn.Read(buf)
+			if n > 0 {
+				builder.Write(buf[:n])
+			}
+			select {
+			case <-ticker.C:
+				if n > 0 {
+					b.throwMessage(event{origin: clientID}, builder.Flush())
+				}
+			default:
+				if n >= partial {
+					b.throwMessage(event{origin: clientID}, builder.Flush())
+				}
+			}
+			select {
+			case <-s.Context().Done():
+				return
+			default:
+				if err == nil {
+					continue
+				}
+				netErr, ok := err.(net.Error)
+				switch {
+				case !ok:
+					// highly likely io.EOF - client left
+					b.throwPart(clientID, partActionLeft)
+					return
+				case ok && netErr.Timeout():
+					b.throwPart(clientID, partActionTimeout)
+					return
+				case ok && netErr.Temporary():
+					continue
+				}
+			}
+		}
 	}(b.connReader.scope)
+	return done
 }
 
-func (b *Backend) eventDispatcher() {
+func (b *Backend) consumeEvents() {
 	mu := &sync.RWMutex{}
 	clients := map[identity]joinEvent{}
 
@@ -280,11 +396,12 @@ func (b *Backend) eventDispatcher() {
 		for {
 			select {
 			case event := <-b.message:
-				// TODO add event to HISTORY
+				msg := message(event.eventTime, event.origin, event.message)
+				b.history.Push(msg)
 				for _, client := range clients {
 					outbox := client.outbox
 					mu.RLock()
-					go b.sendMessage(outbox, message(event.eventTime, event.origin, event.message))
+					b.sendMessage(outbox, msg)
 					mu.RUnlock()
 				}
 			case <-s.Context().Done():
@@ -310,11 +427,15 @@ func (b *Backend) eventDispatcher() {
 				mu.Lock()
 				clients[join.origin] = join
 				mu.Unlock()
-				b.propagateMessage(
+				b.throwMessage(
 					event{origin: identity("*SYS*")},
 					fmt.Sprintf("Client %s has joined", string(join.origin)),
 				)
-				// TODO get HISTORY and send directly to client
+				go func() {
+					for _, msg := range b.history.Tail(10) {
+						<-b.sendMessage(join.outbox, msg)
+					}
+				}()
 			case <-s.Context().Done():
 				return
 			}
@@ -337,7 +458,7 @@ func (b *Backend) eventDispatcher() {
 				mu.Lock()
 				delete(clients, part.origin)
 				mu.Unlock()
-				b.propagateMessage(
+				b.throwMessage(
 					event{origin: identity("*SYS*")},
 					fmt.Sprintf("Client %s has %s", part.origin, part.action),
 				)

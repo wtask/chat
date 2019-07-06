@@ -60,7 +60,7 @@ func (b *Builder) Write(p []byte) (n int, err error) {
 	}
 }
 
-// Len - returns length of currently built string
+// Len - returns length (in bytes) of ready string
 func (b *Builder) Len() int {
 	return b.str.Len()
 }
