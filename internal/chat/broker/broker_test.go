@@ -74,7 +74,8 @@ func TestBroker__StartStop(test *testing.T) {
 	test.Log("Broker stopped in:", b.Quit(5*time.Millisecond))
 }
 
-func readTester(test *testing.T, wg *sync.WaitGroup, expected []string) func(id string, conn net.Conn) {
+// receiver - builds net client to test received messages
+func receiver(test *testing.T, wg *sync.WaitGroup, expected []string) func(id string, conn net.Conn) {
 	return func(id string, conn net.Conn) {
 		defer func() {
 			conn.Close()
@@ -106,7 +107,7 @@ func TestBroker_SendMessage(test *testing.T) {
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	client := readTester(test, wg, message)
+	client := receiver(test, wg, message)
 	go client("net-client", clientConn)
 
 	b.KeepConnection(brokerConn)
