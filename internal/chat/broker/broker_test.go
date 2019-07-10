@@ -1,7 +1,6 @@
 package broker
 
 import (
-	"context"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -18,9 +17,6 @@ func randomSleep(min, max time.Duration) {
 	}
 	r := rand.Int63n(int64(max - min))
 	time.Sleep(time.Duration(r) + min)
-}
-
-func clientMock(ctx context.Context, conn net.Conn, out, in []string, sleepOut func()) {
 }
 
 func TestBroker__StartStop(test *testing.T) {
@@ -78,44 +74,47 @@ func TestBroker__StartStop(test *testing.T) {
 	test.Log("Broker stopped in:", b.Quit(5*time.Millisecond))
 }
 
+func readTester(test *testing.T, wg *sync.WaitGroup, expected []string) func(id string, conn net.Conn) {
+	return func(id string, conn net.Conn) {
+		defer func() {
+			conn.Close()
+			wg.Done()
+		}()
+		test.Log(id, "started")
+		buf, err := ioutil.ReadAll(conn)
+		if err != nil {
+			test.Log(id, "connection read error", err)
+		}
+		test.Log(id, "done, read total", len(buf), "byte(s)")
+		received := strings.SplitAfter(string(buf), "\n")
+		if !reflect.DeepEqual(received, expected) {
+			test.Error("expected messages:", expected, "received:", received)
+		}
+	}
+}
+
 func TestBroker_SendMessage(test *testing.T) {
 	b, err := New()
 	if err != nil {
 		test.Error("broker.New, unexpected error:", err)
 	}
 
-	sent := []string{
+	clientConn, brokerConn := net.Pipe()
+	message := []string{
 		"message-1\n",
 		"message 2",
 	}
-	client := func(wg *sync.WaitGroup, conn net.Conn) {
-		defer func() {
-			conn.Close()
-			wg.Done()
-		}()
-		test.Log("client started")
-		buf, err := ioutil.ReadAll(conn)
-		if err != nil {
-			test.Log("client got read error", err)
-		}
-		test.Log("client done, read total", len(buf), "byte(s)")
-		actual := strings.SplitAfter(string(buf), "\n")
-		if !reflect.DeepEqual(actual, sent) {
-			test.Error("sent messages:", sent, "client received:", actual)
-		}
-	}
-
-	clientConn, brokerConn := net.Pipe()
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go client(wg, clientConn)
+	client := readTester(test, wg, message)
+	go client("net-client", clientConn)
 
 	b.KeepConnection(brokerConn)
 	test.Log("broker started")
-	b.SendMessage(brokerConn, sent[0])
-	test.Logf("broker sent %q", sent[0])
-	b.SendMessage(brokerConn, sent[1])
-	test.Logf("broker sent %q", sent[1])
+	b.SendMessage(brokerConn, message[0])
+	test.Logf("broker sent %q", message[0])
+	b.SendMessage(brokerConn, message[1])
+	test.Logf("broker sent %q", message[1])
 
 	test.Log("broker stopped in:", b.Quit(100*time.Millisecond))
 
