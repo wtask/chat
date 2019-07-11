@@ -60,9 +60,15 @@ func (b *Builder) Write(p []byte) (n int, err error) {
 	}
 }
 
-// Len - returns length (in bytes) of ready string
+// Len - returns length (in bytes) of ready string.
 func (b *Builder) Len() int {
 	return b.str.Len()
+}
+
+// Total - return total size in bytes of underlying data.
+// Total value may be grater than length of ready string.
+func (b *Builder) Total() int {
+	return b.Len() + b.reminder.Len()
 }
 
 // Flush - returns built string and resets internal builder

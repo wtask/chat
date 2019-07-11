@@ -40,7 +40,7 @@ func WithPartChan(part chan<- PartEvent) brokerOption {
 	}
 }
 
-// WithReadTimeout - overwrite default read timeout of connections.
+// WithReadTimeout - overwrites default read timeout of connections.
 func WithReadTimeout(timeout time.Duration) brokerOption {
 	return func(b *Broker) error {
 		if timeout <= 0 {
@@ -51,7 +51,7 @@ func WithReadTimeout(timeout time.Duration) brokerOption {
 	}
 }
 
-// WithWriteTimeout - overwrite default write timeout of connections.
+// WithWriteTimeout - overwrites default write timeout of connections.
 func WithWriteTimeout(timeout time.Duration) brokerOption {
 	return func(b *Broker) error {
 		if timeout <= 0 {
@@ -62,7 +62,7 @@ func WithWriteTimeout(timeout time.Duration) brokerOption {
 	}
 }
 
-// WithReadTick - overwrite default read tick value of connections.
+// WithReadTick - overwrites default read tick value of connections.
 // Broker checks internal buffer, by default every 100 ms
 // and pushes non-empty buffer content into common inbox channel.
 func WithReadTick(tick time.Duration) brokerOption {
@@ -71,6 +71,30 @@ func WithReadTick(tick time.Duration) brokerOption {
 			return fmt.Errorf("broker.WithReadTicks: invalid tick value (%v)", tick)
 		}
 		b.readTick = tick
+		return nil
+	}
+}
+
+// WithMessageSize - overwrites default parameters for buffering of incoming messages.
+// If the size of message in buffer exceeds packet size on every read tick
+// OR equals to complete size just after reading, so it will be send into inbox channel.
+func WithMessageSize(packetSize, completeSize int) brokerOption {
+	return func(b *Broker) error {
+		if packetSize <= 0 {
+			return fmt.Errorf("broker.WithBufferOptions: invalid packetSize value (%d)", packetSize)
+		}
+		if completeSize <= 0 {
+			return fmt.Errorf("broker.WithBufferOptions: invalid completeSize value (%d)", completeSize)
+		}
+		if packetSize > completeSize {
+			return fmt.Errorf(
+				"broker.WithBufferOptions: packetSize (%d) must be less or equal than completeSize (%d)",
+				packetSize,
+				completeSize,
+			)
+		}
+		b.packetSize = packetSize
+		b.completeSize = completeSize
 		return nil
 	}
 }

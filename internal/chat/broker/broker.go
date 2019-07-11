@@ -15,10 +15,11 @@ type Broker struct {
 	readTimeout,
 	readTick,
 	writeTimeout time.Duration
-	bufSize, packetSize int
-	inbox               chan<- MessageEvent
-	join                chan<- JoinEvent
-	part                chan<- PartEvent
+	packetSize, // min message size
+	completeSize int // max message size
+	inbox chan<- MessageEvent
+	join  chan<- JoinEvent
+	part  chan<- PartEvent
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -51,7 +52,7 @@ func New(options ...brokerOption) (*Broker, error) {
 		readTimeout:  60 * time.Second,
 		readTick:     100 * time.Millisecond,
 		writeTimeout: 60 * time.Second,
-		bufSize:      2048,
+		completeSize: 2048,
 		packetSize:   1500,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -249,7 +250,7 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 	}
 
 	builder := message.Builder{}
-	buf := make([]byte, b.bufSize)
+	buf := make([]byte, b.completeSize)
 	ticker := time.NewTicker(b.readTick)
 	defer ticker.Stop()
 	for {
@@ -260,11 +261,11 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 		}
 		select {
 		case <-ticker.C:
-			if n > 0 {
+			if builder.Len() >= b.packetSize {
 				b.notifyInboundMessage(conn, builder.Flush())
 			}
 		default:
-			if n >= b.packetSize {
+			if builder.Len() >= b.completeSize {
 				b.notifyInboundMessage(conn, builder.Flush())
 			}
 		}
@@ -274,6 +275,9 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 		default:
 			if err == nil {
 				continue
+			}
+			if builder.Len() > 0 {
+				b.notifyInboundMessage(conn, builder.Flush())
 			}
 			netErr, ok := err.(net.Error)
 			switch {

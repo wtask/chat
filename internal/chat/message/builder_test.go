@@ -30,8 +30,8 @@ func TestLastValidRune(test *testing.T) {
 
 func TestBuilder(test *testing.T) {
 	builder := Builder{}
-	if builder.Len() != 0 {
-		test.Error("Invalid string length just after init", builder.Len())
+	if builder.Total() != 0 {
+		test.Error("Invalid total size just after init", builder.Total())
 	}
 	if s := builder.Flush(); s != "" {
 		test.Error("Invalid string has built just after init", s)
