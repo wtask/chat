@@ -250,7 +250,6 @@ func TestBroker_notifyIncomingMessage(test *testing.T) {
 	b.KeepConnection(broker)
 	test.Log("broker started")
 	client.Write([]byte(message))
-	client.Close()
 	test.Log("client sent message")
 	select {
 	case event := <-inbox:
@@ -268,4 +267,5 @@ func TestBroker_notifyIncomingMessage(test *testing.T) {
 		test.Fail()
 	}
 	test.Log("broker stopped in:", b.Quit(50*time.Millisecond))
+	client.Close()
 }
