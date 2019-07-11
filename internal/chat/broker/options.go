@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// WithInbox - attach channel to Broker to be notified for incoming messages.
+// WithInbox - attach channel to be notified for incoming messages.
 // Note, if Broker is used without inbox it can only to send outgoing messages.
 func WithInbox(inbox chan<- MessageEvent) brokerOption {
 	return func(b *Broker) error {
@@ -18,7 +18,7 @@ func WithInbox(inbox chan<- MessageEvent) brokerOption {
 	}
 }
 
-// WithJoinChan - attach channel to Broker to be notified for client joins.
+// WithJoinChan - attach channel to be notified of client is joined.
 func WithJoinChan(join chan<- JoinEvent) brokerOption {
 	return func(b *Broker) error {
 		if b.join != nil {
@@ -29,7 +29,7 @@ func WithJoinChan(join chan<- JoinEvent) brokerOption {
 	}
 }
 
-// WithPartChan - attach channel to Broker to be notified for parting with clients.
+// WithPartChan - attach channel to be notified of parting with client.
 func WithPartChan(part chan<- PartEvent) brokerOption {
 	return func(b *Broker) error {
 		if b.part != nil {
