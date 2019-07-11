@@ -44,7 +44,7 @@ func setup(b *Broker, options ...brokerOption) error {
 	return nil
 }
 
-// New - builds Broker with required and optional params.
+// New - builds Broker with needed options.
 func New(options ...brokerOption) (*Broker, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &Broker{
@@ -66,6 +66,8 @@ func New(options ...brokerOption) (*Broker, error) {
 	return b, nil
 }
 
+// Quit - cancels internal context and waits all IO handlers will stop.
+// Returns duration of time spent for quit. This time always less or equal of given timeout.
 func (b *Broker) Quit(timeout time.Duration) time.Duration {
 	if b.ctx.Err() != nil {
 		return 0
@@ -85,13 +87,10 @@ func (b *Broker) Quit(timeout time.Duration) time.Duration {
 	// TODO close(inbox), close(join), close(part)
 }
 
-func (b *Broker) KeepConnection(conn net.Conn) {
+// KeepConnection - registers new net connection and starts in background IO handlers to communicate over it.
+func (b *Broker) KeepConnection(conn net.Conn) error {
 	if b.ctx.Err() != nil {
-		return
-	}
-
-	if _, ok := b.clients.get(conn); ok {
-		return
+		return ErrUnderStopCondition
 	}
 
 	// ctx - new context, derrived from Broker, to help cancel "read" when "write" failed ond vice versa
@@ -99,7 +98,7 @@ func (b *Broker) KeepConnection(conn net.Conn) {
 	outbox := make(chan string)
 	if !b.clients.add(conn, &client{ctx, outbox}) {
 		cancelIO()
-		return
+		return ErrConnKept
 	}
 
 	b.wg.Add(1)
@@ -135,6 +134,8 @@ func (b *Broker) KeepConnection(conn net.Conn) {
 			b.maintainInbox(ctx, conn)
 		}()
 	}()
+
+	return nil
 }
 
 // notifyJoin - propagates join event if join channel available.
@@ -182,7 +183,7 @@ func (b *Broker) notifyInboundMessage(conn net.Conn, message string) {
 	}()
 }
 
-// SendMessage - tries to send message to the outer side, which identified by the connection.
+// SendMessage - tries to send message outwards for single known connection.
 func (b *Broker) SendMessage(conn net.Conn, message string) {
 	client, ok := b.clients.get(conn)
 	if !ok || client.ctx.Err() != nil {
@@ -196,11 +197,18 @@ func (b *Broker) SendMessage(conn net.Conn, message string) {
 	}
 }
 
-// Broadcast - tries to send message to
+// Broadcast - tries to send a message to all kept connections.
+// Be careful placing method into goroutine since clients will become to receive unordered messages.
 func (b *Broker) Broadcast(message string) {
+	wg := sync.WaitGroup{}
 	b.clients.scan(func(conn net.Conn) {
-		go b.SendMessage(conn, message)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.SendMessage(conn, message)
+		}()
 	})
+	wg.Wait()
 }
 
 func (b *Broker) maintainOutbox(ctx context.Context, conn net.Conn, outbox <-chan string) {

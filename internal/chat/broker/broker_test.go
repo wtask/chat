@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -74,22 +75,57 @@ func TestBroker__StartStop(test *testing.T) {
 	test.Log("Broker stopped in:", b.Quit(5*time.Millisecond))
 }
 
-// receiver - builds net client to test received messages
-func receiver(test *testing.T, wg *sync.WaitGroup, expected []string) func(id string, conn net.Conn) {
+// receiverTest - builds net client to check received messages
+func receiverTest(test *testing.T, wg *sync.WaitGroup, expected []string) func(id string, conn net.Conn) {
 	return func(id string, conn net.Conn) {
 		defer func() {
 			conn.Close()
 			wg.Done()
+			test.Log(id, "done")
 		}()
 		test.Log(id, "started")
 		buf, err := ioutil.ReadAll(conn)
 		if err != nil {
 			test.Log(id, "connection read error", err)
 		}
-		test.Log(id, "done, read total", len(buf), "byte(s)")
 		received := strings.SplitAfter(string(buf), "\n")
+		test.Log(id, "received", len(received), "message(s)", "total", len(buf), "byte(s)")
 		if !reflect.DeepEqual(received, expected) {
-			test.Error("expected messages:", expected, "received:", received)
+			test.Error(id, "expected messages:", expected, "received:", received)
+		}
+	}
+}
+
+type link struct{ clientConn, brokerConn net.Conn }
+
+func connect() link {
+	c, s := net.Pipe()
+	return link{c, s}
+}
+
+func TestBroker_KeepConnection_ErrorCase(test *testing.T) {
+	link1 := connect()
+	cases := []struct {
+		link        link
+		expectedErr error
+	}{
+		{link1, nil},
+		{link1, ErrConnKept},
+	}
+	b, err := New()
+	if err != nil {
+		test.Error("broker.New, unexpected error:", err)
+	}
+	for _, c := range cases {
+		if err := b.KeepConnection(c.link.brokerConn); err != c.expectedErr {
+			test.Error("Expected error:", c.expectedErr, "got:", err)
+		}
+	}
+	b.Quit(100 * time.Millisecond)
+
+	for _, l := range []link{link1, connect()} {
+		if err := b.KeepConnection(l.brokerConn); err != ErrUnderStopCondition {
+			test.Error("Expected error:", ErrUnderStopCondition, "got:", err)
 		}
 	}
 }
@@ -101,21 +137,55 @@ func TestBroker_SendMessage(test *testing.T) {
 	}
 
 	clientConn, brokerConn := net.Pipe()
-	message := []string{
+	messages := []string{
 		"message-1\n",
 		"message 2",
 	}
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	client := receiver(test, wg, message)
+	client := receiverTest(test, wg, messages)
 	go client("net-client", clientConn)
 
 	b.KeepConnection(brokerConn)
 	test.Log("broker started")
-	b.SendMessage(brokerConn, message[0])
-	test.Logf("broker sent %q", message[0])
-	b.SendMessage(brokerConn, message[1])
-	test.Logf("broker sent %q", message[1])
+	b.SendMessage(brokerConn, messages[0])
+	test.Logf("broker sent %q", messages[0])
+	b.SendMessage(brokerConn, messages[1])
+	test.Logf("broker sent %q", messages[1])
+
+	test.Log("broker stopped in:", b.Quit(100*time.Millisecond))
+
+	wg.Wait()
+}
+
+func TestBroker_Broadcast(test *testing.T) {
+	network := []link{
+		connect(),
+		connect(),
+	}
+
+	b, err := New()
+	if err != nil {
+		test.Error("broker.New, unexpected error:", err)
+	}
+	messages := []string{
+		"message-1\n",
+		"message 2",
+	}
+	wg := &sync.WaitGroup{}
+	wg.Add(len(network))
+	client := receiverTest(test, wg, messages)
+	for i, l := range network {
+		go func(conn net.Conn) {
+			client(fmt.Sprintf("net-client-%d", i+1), conn)
+		}(l.clientConn)
+		b.KeepConnection(l.brokerConn)
+		test.Log("broker start to keep connection #", i+1)
+	}
+
+	for _, m := range messages {
+		b.Broadcast(m)
+	}
 
 	test.Log("broker stopped in:", b.Quit(100*time.Millisecond))
 

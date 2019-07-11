@@ -11,7 +11,7 @@ import (
 func WithInbox(inbox chan<- MessageEvent) brokerOption {
 	return func(b *Broker) error {
 		if b.inbox != nil {
-			return errors.New("broker.WithInbox: inbox already set up.")
+			return errors.New("broker.WithInbox: inbox already set up")
 		}
 		b.inbox = inbox
 		return nil
@@ -22,7 +22,7 @@ func WithInbox(inbox chan<- MessageEvent) brokerOption {
 func WithJoinChan(join chan<- JoinEvent) brokerOption {
 	return func(b *Broker) error {
 		if b.join != nil {
-			return errors.New("broker.WithJoinChan: join-channel already set up.")
+			return errors.New("broker.WithJoinChan: join-channel already set up")
 		}
 		b.join = join
 		return nil
@@ -33,7 +33,7 @@ func WithJoinChan(join chan<- JoinEvent) brokerOption {
 func WithPartChan(part chan<- PartEvent) brokerOption {
 	return func(b *Broker) error {
 		if b.part != nil {
-			return errors.New("broker.WithPartChan: part-channel already set up.")
+			return errors.New("broker.WithPartChan: part-channel already set up")
 		}
 		b.part = part
 		return nil
