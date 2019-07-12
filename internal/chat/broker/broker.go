@@ -85,10 +85,9 @@ func (b *Broker) Quit(timeout time.Duration) time.Duration {
 	case <-time.After(timeout):
 	}
 	return time.Since(from)
-	// TODO close(inbox), close(join), close(part)
 }
 
-// KeepConnection - registers new net connection and starts in background IO handlers to communicate over it.
+// KeepConnection - registers new connection and starts IO handlers in background to communicate over it.
 func (b *Broker) KeepConnection(conn net.Conn) error {
 	if b.ctx.Err() != nil {
 		return ErrUnderStopCondition
