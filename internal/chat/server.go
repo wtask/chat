@@ -21,10 +21,14 @@ type Server struct {
 	inbox  <-chan broker.MessageEvent
 	join   <-chan broker.JoinEvent
 	part   <-chan broker.PartEvent
+
+	history               MessageHistory // TODO make option
+	historyGreets         int            // TODO make option
+	historyConsiderServer bool           // TODO make option
 }
 
 // NewServer - creates new chat server which ready to serve several network listeners.
-func NewServer(buildBroker BrokerBuilder) (*Server, error) {
+func NewServer(buildBroker BrokerBuilder, history MessageHistory) (*Server, error) {
 	if buildBroker == nil {
 		return nil, errors.New("chat.NewServer: required chat.BrokerBuilder is nil")
 	}
@@ -37,13 +41,16 @@ func NewServer(buildBroker BrokerBuilder) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     &sync.WaitGroup{},
-		broker: b,
-		inbox:  inbox,
-		join:   join,
-		part:   part,
+		ctx:                   ctx,
+		cancel:                cancel,
+		wg:                    &sync.WaitGroup{},
+		broker:                b,
+		inbox:                 inbox,
+		join:                  join,
+		part:                  part,
+		history:               history,
+		historyGreets:         10,
+		historyConsiderServer: false,
 	}
 	s.handleEvents()
 	return s, nil
@@ -118,7 +125,9 @@ func (s *Server) handleMessageEvents() {
 				// TODO log invalid event
 				continue
 			}
-			s.broker.Broadcast(formatMessage(event.OriginTime.UTC(), client, event.Message))
+			msg := formatMessage(event.OriginTime.UTC(), client, event.Message)
+			s.broker.Broadcast(msg)
+			historyPush(s.history, msg)
 		case <-s.ctx.Done():
 			return
 		}
@@ -140,13 +149,15 @@ func (s *Server) handleJoinEvents() {
 				// TODO log invalid event
 				continue
 			}
-			s.broker.Broadcast(
-				formatMessage(
-					event.OriginTime.UTC(),
-					"**SERVER**",
-					fmt.Sprintf("Client %s has joined", client),
-				),
-			)
+			msg := formatMessage(event.OriginTime.UTC(), "**SERVER**", fmt.Sprintf("Client %s has joined", client))
+			s.broker.Broadcast(msg)
+			for _, msg := range historyTail(s.history, 10) {
+				s.broker.SendMessage(event.Conn, msg)
+			}
+			if s.historyConsiderServer {
+				historyPush(s.history, msg)
+			}
+
 		case <-s.ctx.Done():
 			return
 		}
@@ -168,13 +179,15 @@ func (s *Server) handlePartEvents() {
 				// TODO log invalid event
 				continue
 			}
-			s.broker.Broadcast(
-				formatMessage(
-					event.OriginTime.UTC(),
-					"**SERVER**",
-					fmt.Sprintf("Client %s has %s", client, formatPartAction(event.Action)),
-				),
+			msg := formatMessage(
+				event.OriginTime.UTC(),
+				"**SERVER**",
+				fmt.Sprintf("Client %s has %s", client, formatPartAction(event.Action)),
 			)
+			s.broker.Broadcast(msg)
+			if s.historyConsiderServer {
+				historyPush(s.history, msg)
+			}
 		case <-s.ctx.Done():
 			return
 		}

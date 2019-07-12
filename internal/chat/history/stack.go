@@ -40,18 +40,6 @@ func (s *Stack) Push(item string) {
 	s.data = append(s.data, item)
 }
 
-// func (s *Stack) Pop() *string {
-// 	l := s.Len()
-// 	if l == 0 {
-// 		return nil
-// 	}
-// 	s.mu.Lock()
-// 	defer s.mu.Unlock()
-// 	item := s.data[l-1]
-// 	s.data = s.data[:l-1]
-// 	return &item
-// }
-
 // Tail - makes copy of last n-items from stack into resulting slice.
 // The first item in resulting slice is the most older.
 func (s *Stack) Tail(n int) []string {
