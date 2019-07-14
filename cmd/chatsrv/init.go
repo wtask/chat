@@ -42,7 +42,7 @@ var (
 	// BinaryName - name of run application binary
 	BinaryName = strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 
-	// Version - application version fingerprint
+	// Version - app version fingerprint
 	Version = semver.V{Minor: 3, PreRelease: "beta"}.String()
 )
 
