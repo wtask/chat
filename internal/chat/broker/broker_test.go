@@ -18,8 +18,7 @@ func Test_New(test *testing.T) {
 	readTimeout := 15 * time.Second
 	writeTimeout := 15 * time.Second
 	readTick := 150 * time.Millisecond
-	packetSize := 1
-	completeSize := 10
+	bufSize := 10
 	b, err := New(
 		WithInbox(inbox),
 		WithJoinChan(join),
@@ -27,7 +26,7 @@ func Test_New(test *testing.T) {
 		WithReadTimeout(readTimeout),
 		WithWriteTimeout(writeTimeout),
 		WithReadTick(readTick),
-		WithMessageSize(packetSize, completeSize),
+		WithBufferSize(bufSize),
 	)
 	if err != nil {
 		test.Error("broker.New, unexpected error", err)
@@ -56,16 +55,9 @@ func Test_New(test *testing.T) {
 	if b.readTick != readTick {
 		test.Error("broker.New: unexpected ticks duration", b.readTick)
 	}
-	if b.bufSize <= 0 {
-		test.Error("broker.New: invalid bufSize", b.bufSize)
+	if b.bufSize != bufSize {
+		test.Error("broker.New: unexpected bufSize", b.bufSize)
 	}
-	if b.packetSize <= 0 {
-		test.Error("broker.New: invalid packetSize", b.packetSize)
-	}
-	if b.packetSize > b.bufSize {
-		test.Error("broker.New: bufSize must be >= packetSize")
-	}
-
 	test.Log("Broker stopped in:", b.Quit(50*time.Millisecond))
 }
 
@@ -167,6 +159,7 @@ func TestBroker_Broadcast(test *testing.T) {
 		"message 2",
 	}
 	wg := &sync.WaitGroup{}
+	defer wg.Wait()
 	wg.Add(len(network))
 	client := receiverTest(test, wg, messages)
 	for i, l := range network {
@@ -182,8 +175,6 @@ func TestBroker_Broadcast(test *testing.T) {
 	}
 
 	test.Log("broker stopped in:", b.Quit(50*time.Millisecond))
-
-	wg.Wait()
 }
 
 func TestBroker_notifyJoin(test *testing.T) {
@@ -240,7 +231,7 @@ func TestBroker_notifyIncomingMessage(test *testing.T) {
 	message := "message"
 	b, err := New(
 		WithInbox(inbox),
-		WithMessageSize(len(message), len(message)), //to eliminate the buffer effect
+		WithBufferSize(len(message)), //to eliminate the buffer effect
 		WithReadTick(20*time.Millisecond),
 	)
 	if err != nil {

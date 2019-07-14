@@ -75,26 +75,15 @@ func WithReadTick(tick time.Duration) brokerOption {
 	}
 }
 
-// WithMessageSize - overwrites default parameters for buffering of incoming messages.
+// WithBufferSize - overwrites default parameters for buffering of incoming messages.
 // If the size of message in buffer exceeds packet size on every read tick
 // OR equals to complete size just after reading, so it will be send into inbox channel.
-func WithMessageSize(packetSize, completeSize int) brokerOption {
+func WithBufferSize(size int) brokerOption {
 	return func(b *Broker) error {
-		if packetSize <= 0 {
-			return fmt.Errorf("broker.WithBufferOptions: invalid packetSize value (%d)", packetSize)
+		if size <= 0 {
+			return fmt.Errorf("broker.WithBufferSize: invalid size value (%d)", size)
 		}
-		if completeSize <= 0 {
-			return fmt.Errorf("broker.WithBufferOptions: invalid completeSize value (%d)", completeSize)
-		}
-		if packetSize > completeSize {
-			return fmt.Errorf(
-				"broker.WithBufferOptions: packetSize (%d) must be less or equal than completeSize (%d)",
-				packetSize,
-				completeSize,
-			)
-		}
-		b.packetSize = packetSize
-		b.bufSize = completeSize
+		b.bufSize = size
 		return nil
 	}
 }

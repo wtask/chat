@@ -12,35 +12,31 @@ import (
 	"github.com/wtask/chat/internal/chat/history"
 )
 
-type (
-	// Logger - logging interface used by the server
-	Logger interface {
-		Println(v ...interface{})
-		Printf(format string, v ...interface{})
-	}
-)
-
 func main() {
-	var log Logger = stdlog.New(os.Stdout, "chatsrv:"+Version+" ", stdlog.Ldate|stdlog.Ltime)
-	log.Printf("Started with config: %+v", Config)
+	logger := stdlog.New(os.Stdout, "chatsrv:"+Version+" ", stdlog.Ldate|stdlog.Ltime)
+	logger.Printf("Started with config: %+v", Config)
 
 	node := net.JoinHostPort(Config.IPAddress, fmt.Sprintf("%d", Config.Port))
 	listener, err := net.Listen("tcp", node)
 	if err != nil {
-		log.Println("ERR", "Unable to listen TCP:", err)
+		logger.Println("ERR", "Unable to listen TCP:", err)
 		os.Exit(1)
 	}
-	log.Println("Listen on:", node)
+	logger.Println("Listen", node)
 
 	history, err := history.NewStack(Config.NewClientHistoryGreets)
 	if err != nil {
-		log.Println("ERR", "Invalid config:", err)
+		logger.Println("ERR", "Invalid config:", err)
 		os.Exit(1)
 	}
 
-	srv, err := chat.NewServer(chat.DefaultBroker(), history)
+	server, err := chat.NewServer(
+		chat.DefaultBroker(),
+		chat.WithMessageHistory(history, 10),
+		chat.WithLogger(logger),
+	)
 	if err != nil {
-		log.Println("ERR", "Can't start chat server:", err)
+		logger.Println("ERR", "Can't start chat server:", err)
 		listener.Close()
 		os.Exit(1)
 	}
@@ -48,10 +44,10 @@ func main() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
-	go srv.Serve(listener)
-	log.Println("Chat server has started.", "Press Ctrl-C in CLI to stop it.")
+	go server.Serve(listener)
+	logger.Println("Chat server has started.")
 
 	<-sig
-	log.Println("Got stop signal")
-	log.Println("Server stopped in", srv.Shutdown(5*time.Second), "seconds, bye")
+	logger.Println("Got stop signal")
+	logger.Println("Chat server stopped in", server.Shutdown(10*time.Second), "seconds, bye")
 }

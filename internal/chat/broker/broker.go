@@ -15,11 +15,10 @@ type Broker struct {
 	readTimeout,
 	readTick,
 	writeTimeout time.Duration
-	packetSize, // min message size
-	bufSize int // max message size
-	inbox chan<- MessageEvent
-	join  chan<- JoinEvent
-	part  chan<- PartEvent
+	bufSize int // conn read buffer size
+	inbox   chan<- MessageEvent
+	join    chan<- JoinEvent
+	part    chan<- PartEvent
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -53,7 +52,6 @@ func New(options ...brokerOption) (*Broker, error) {
 		readTick:     100 * time.Millisecond,
 		writeTimeout: 60 * time.Second,
 		bufSize:      2048,
-		packetSize:   1500,
 		ctx:          ctx,
 		cancel:       cancel,
 		wg:           &sync.WaitGroup{},
@@ -252,8 +250,8 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 	connErr := make(chan error, 1)
 
 	wg := sync.WaitGroup{}
-	defer wg.Done()
-	
+	defer wg.Wait()
+
 	wg.Add(1)
 	go func() {
 		/* connection reader */
@@ -272,6 +270,7 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 				connErr <- err
 				return
 			}
+
 			select {
 			case <-b.ctx.Done():
 				return
@@ -286,24 +285,19 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 	for {
 		select {
 		case <-ticker.C:
-			// partial message
-			if builder.Len() >= b.packetSize {
-				b.notifyInboundMessage(conn, builder.Flush())
+			if msg := builder.FlushMessage(); msg != "" {
+				b.notifyInboundMessage(conn, msg)
 			}
 		default:
-			// TODO check there are complete messages in builder/buffer
-			if builder.Len() >= b.packetSize {
+			if builder.Len() >= b.bufSize {
 				b.notifyInboundMessage(conn, builder.Flush())
 			}
 		}
 
 		select {
 		case err, ok := <-connErr:
-			if !ok {
+			if !ok || err == nil {
 				return
-			}
-			if err == nil {
-				continue
 			}
 			if builder.Len() > 0 {
 				b.notifyInboundMessage(conn, builder.Flush())

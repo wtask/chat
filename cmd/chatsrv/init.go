@@ -43,7 +43,7 @@ var (
 	BinaryName = strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 
 	// Version - application version fingerprint
-	Version = semver.V{Minor: 2, PreRelease: "alfa"}.String()
+	Version = semver.V{Minor: 3, PreRelease: "beta"}.String()
 )
 
 func init() {
@@ -83,5 +83,5 @@ func init() {
 	}
 	Config.ClientIdleTimeout = time.Duration(clientTTL) * time.Second
 
-	fmt.Fprint(out, "TCP chat backend is launching ...\n")
+	fmt.Fprint(out, "TCP chat server is launching, press Ctrl-C to stop...\n")
 }

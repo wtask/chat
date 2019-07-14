@@ -37,7 +37,7 @@ func DefaultBroker() BrokerBuilder {
 			broker.WithReadTimeout(60*time.Second),
 			broker.WithWriteTimeout(60*time.Second),
 			broker.WithReadTick(100*time.Millisecond),
-			broker.WithMessageSize(1500, 2048),
+			broker.WithBufferSize(1500),
 		)
 	}
 }
