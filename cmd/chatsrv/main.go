@@ -24,7 +24,7 @@ func main() {
 	}
 	logger.Println("Listen", node)
 
-	history, err := history.NewStack(Config.NewClientHistoryGreets)
+	history, err := history.NewStack(Config.ClientHistoryGreets + 1)
 	if err != nil {
 		logger.Println("ERR", "Invalid config:", err)
 		os.Exit(1)
@@ -32,7 +32,7 @@ func main() {
 
 	server, err := chat.NewServer(
 		chat.DefaultBroker(),
-		chat.WithMessageHistory(history, 10),
+		chat.WithMessageHistory(history, Config.ClientHistoryGreets),
 		chat.WithLogger(logger),
 	)
 	if err != nil {
@@ -41,13 +41,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt, os.Kill)
-
 	go server.Serve(listener)
 	logger.Println("Chat server has started.")
 
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt, os.Kill)
 	<-sig
+
 	logger.Println("Got stop signal")
 	logger.Println("Chat server stopped in", server.Shutdown(10*time.Second), "seconds, bye")
 }

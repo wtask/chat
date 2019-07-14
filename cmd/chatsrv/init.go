@@ -20,8 +20,8 @@ type (
 		Port uint
 		// ClientIdleTimeout - idle period before client is disconnected
 		ClientIdleTimeout time.Duration
-		// NewClientHistoryGreets - num of messages from chat history which is pushed to newly connected client
-		NewClientHistoryGreets int
+		// ClientHistoryGreets - num of messages from chat history which is pushed to newly connected client
+		ClientHistoryGreets int
 	}
 )
 
@@ -33,17 +33,17 @@ const (
 var (
 	// Config - current configuration of the server
 	Config = Configuration{
-		IPAddress:              "",
-		Port:                   20000,
-		ClientIdleTimeout:      IdleTimeoutMultiplier * time.Second,
-		NewClientHistoryGreets: 10,
+		IPAddress:           "",
+		Port:                20000,
+		ClientIdleTimeout:   IdleTimeoutMultiplier * time.Second,
+		ClientHistoryGreets: 10,
 	}
 
 	// BinaryName - name of run application binary
 	BinaryName = strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 
 	// Version - app version fingerprint
-	Version = semver.V{Minor: 3, PreRelease: "beta"}.String()
+	Version = semver.V{Minor: 3, Patch: 1, PreRelease: "beta"}.String()
 )
 
 func init() {
@@ -62,12 +62,12 @@ func init() {
 	flag.StringVar(&Config.IPAddress, "ip", "", "Listen address")
 	flag.UintVar(&Config.Port, "port", 20000, "Listen port")
 	clientTTL := IdleTimeoutMultiplier
-	flag.IntVar(&clientTTL, "client-idle-timeout", clientTTL, "Idle seconds duration before client is disconnected.")
+	flag.IntVar(&clientTTL, "client-timeout", clientTTL, "Idle duration in seconds before client is disconnected.")
 	flag.IntVar(
-		&Config.NewClientHistoryGreets,
-		"new-client-history",
+		&Config.ClientHistoryGreets,
+		"history-greets",
 		10,
-		"Num of messages from chat history which is pushed to newly connected client",
+		"Num of messages from chat history which is pushed to newly connected client.",
 	)
 
 	flag.Parse()
@@ -78,10 +78,15 @@ func init() {
 	}
 
 	if clientTTL < 1 {
-		printError("client-idle-timeout value should be greater 1")
+		printError("client-timeout value should be greater 1")
 		os.Exit(1)
 	}
 	Config.ClientIdleTimeout = time.Duration(clientTTL) * time.Second
+
+	if Config.ClientHistoryGreets < 0 {
+		printError("history-greets value should be greater or equal 0")
+		os.Exit(1)
+	}
 
 	fmt.Fprint(out, "TCP chat server is launching, press Ctrl-C to stop...\n")
 }
