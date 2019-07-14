@@ -56,13 +56,13 @@ func Test_New(test *testing.T) {
 	if b.readTick != readTick {
 		test.Error("broker.New: unexpected ticks duration", b.readTick)
 	}
-	if b.completeSize <= 0 {
-		test.Error("broker.New: invalid bufSize", b.completeSize)
+	if b.bufSize <= 0 {
+		test.Error("broker.New: invalid bufSize", b.bufSize)
 	}
 	if b.packetSize <= 0 {
 		test.Error("broker.New: invalid packetSize", b.packetSize)
 	}
-	if b.packetSize > b.completeSize {
+	if b.packetSize > b.bufSize {
 		test.Error("broker.New: bufSize must be >= packetSize")
 	}
 

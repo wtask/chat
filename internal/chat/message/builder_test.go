@@ -10,7 +10,7 @@ func TestLastValidRune(test *testing.T) {
 		data       []byte
 		expI, expS int
 	}{
-		{[]byte{}, -1, 0},
+		{[]byte{}, 0, 0},
 		{[]byte("⌘"), 0, 3},                          // "⌘": []byte{226, 140, 152}
 		{[]byte{226, 140}, -1, 0},                    // invalid sequence
 		{[]byte{226, 140, 226, 140, 152}, 2, 3},      // there are invalid sequences
@@ -30,11 +30,11 @@ func TestLastValidRune(test *testing.T) {
 
 func TestBuilder(test *testing.T) {
 	builder := Builder{}
-	if builder.Total() != 0 {
-		test.Error("Invalid total size just after init", builder.Total())
+	if builder.Len() != 0 {
+		test.Error("Invalid total length just after init", builder.Len())
 	}
 	if s := builder.Flush(); s != "" {
-		test.Error("Invalid string has built just after init", s)
+		test.Error("Invalid filtered result just after init", s)
 	}
 	content := []byte("Hello Builder!")
 	builder.Write(content)
@@ -49,5 +49,23 @@ func TestBuilder(test *testing.T) {
 	builder.Write(cpoint[2:])
 	if s := builder.Flush(); s != string(cpoint) {
 		test.Error("Expected Flush() result:", string(cpoint), "actual:", s)
+	}
+
+	builder.Write([]byte("Hello,\nBuilder!"))
+	if builder.MessageLen() == 0 {
+		test.Error("Expected MessageLen() result:", len("Hello,"), "actual:", builder.MessageLen())
+	}
+	if l := builder.Len() - builder.MessageLen(); l != len("Builder!") {
+		test.Error("Unexpected filtered draft length:", l)
+	}
+	if m := builder.FlushMessage(); m != "Hello," {
+		test.Errorf("Unexpected FlushMessage() result: %q", m)
+	}
+	builder.Write([]byte("\r\n\n\rLet chat now!\n"))
+	if m := builder.FlushMessage(); m != "Builder!\nLet chat now!" {
+		test.Errorf("Unexpected FlushMessage() result: %q", m)
+	}
+	if s := builder.Flush(); s != "" {
+		test.Errorf("Unexpected Flush() result: %q", s)
 	}
 }

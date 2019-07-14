@@ -20,25 +20,30 @@ type (
 		Port uint
 		// ClientIdleTimeout - idle period before client is disconnected
 		ClientIdleTimeout time.Duration
-		// NewClientMessageHistory - num of messages from chat history which is pushed to newly connected client
-		NewClientMessageHistory uint
+		// NewClientHistoryGreets - num of messages from chat history which is pushed to newly connected client
+		NewClientHistoryGreets int
 	}
+)
+
+const (
+	// IdleTimeoutMultiplier - timeout payload without time units
+	IdleTimeoutMultiplier = 60
 )
 
 var (
 	// Config - current configuration of the server
 	Config = Configuration{
-		IPAddress:               "",
-		Port:                    20000,
-		ClientIdleTimeout:       30 * time.Minute,
-		NewClientMessageHistory: 10,
+		IPAddress:              "",
+		Port:                   20000,
+		ClientIdleTimeout:      IdleTimeoutMultiplier * time.Second,
+		NewClientHistoryGreets: 10,
 	}
 
 	// BinaryName - name of run application binary
 	BinaryName = strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 
 	// Version - application version fingerprint
-	Version = semver.V{Minor: 1, PreRelease: "prototype"}.String()
+	Version = semver.V{Minor: 2, PreRelease: "alfa"}.String()
 )
 
 func init() {
@@ -56,10 +61,10 @@ func init() {
 	flag.BoolVar(&help, "help", false, "Print usage help")
 	flag.StringVar(&Config.IPAddress, "ip", "", "Listen address")
 	flag.UintVar(&Config.Port, "port", 20000, "Listen port")
-	clientTTL := 30
-	flag.IntVar(&clientTTL, "client-idle-timeout", clientTTL, "Idle period in minutes before client is disconnected.")
-	flag.UintVar(
-		&Config.NewClientMessageHistory,
+	clientTTL := IdleTimeoutMultiplier
+	flag.IntVar(&clientTTL, "client-idle-timeout", clientTTL, "Idle seconds duration before client is disconnected.")
+	flag.IntVar(
+		&Config.NewClientHistoryGreets,
 		"new-client-history",
 		10,
 		"Num of messages from chat history which is pushed to newly connected client",
@@ -76,7 +81,7 @@ func init() {
 		printError("client-idle-timeout value should be greater 1")
 		os.Exit(1)
 	}
-	Config.ClientIdleTimeout = time.Duration(clientTTL) * time.Minute
+	Config.ClientIdleTimeout = time.Duration(clientTTL) * time.Second
 
 	fmt.Fprint(out, "TCP chat backend is launching ...\n")
 }

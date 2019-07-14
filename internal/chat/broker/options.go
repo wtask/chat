@@ -94,7 +94,7 @@ func WithMessageSize(packetSize, completeSize int) brokerOption {
 			)
 		}
 		b.packetSize = packetSize
-		b.completeSize = completeSize
+		b.bufSize = completeSize
 		return nil
 	}
 }

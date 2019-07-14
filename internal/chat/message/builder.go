@@ -4,34 +4,37 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
 
-// Builder - implements io.Writer interface to build message body from byte parts
+// Builder - implements io.Writer interface to build message body from byte parts.
 type Builder struct {
-	reminder bytes.Buffer
-	str      strings.Builder
+	remainder bytes.Buffer
+	mu        sync.RWMutex // protects both of builders
+	draft,
+	message strings.Builder
 }
 
 func (b *Builder) Write(p []byte) (n int, err error) {
-	reminder := []byte{} // invalid unicode sequence at the end of p (if exist)
+	remainder := []byte{} // invalid unicode sequence at the end of p (if exist)
 	defer func() {
-		b.reminder.Write(reminder)
+		b.remainder.Write(remainder)
 	}()
 
 	i, s := LastValidRune(p)
 	if i > -1 {
-		reminder = p[i+s:]
+		remainder = p[i+s:]
 	} else {
 		// all bytes in p represemt invalid unicode sequence
-		reminder = p
+		remainder = p
 	}
-	b.reminder.Write(p)
+	b.remainder.Write(p)
 
 	var prev rune
 	for n, err = 0, nil; ; {
-		r, size, err := b.reminder.ReadRune()
+		r, size, err := b.remainder.ReadRune()
 		if err != nil {
 			if err == io.EOF {
 				return n, nil
@@ -45,36 +48,73 @@ func (b *Builder) Write(p []byte) (n int, err error) {
 		}
 		switch {
 		default:
-			b.str.WriteRune(r)
+			b.mu.Lock()
+			b.draft.WriteRune(r)
+			b.mu.Unlock()
 		case r == '\n':
-			// replace continuous EOL with single space
-			if prev != r {
-				b.str.WriteByte(' ')
+			if prev == r {
+				// drop continuos EOLs
+				break
 			}
-		case unicode.IsSpace(r):
-			b.str.WriteByte(' ')
+			b.mu.Lock()
+			if b.draft.Len() > 0 {
+				// complete message
+				if b.message.Len() > 0 {
+					b.message.WriteRune(r)
+				}
+				b.message.WriteString(b.draft.String())
+				b.draft.Reset()
+			}
+			b.mu.Unlock()
 		case unicode.IsControl(r):
 			// drop
+		case unicode.IsSpace(r):
+			b.mu.Lock()
+			b.draft.WriteByte(' ')
+			b.mu.Unlock()
 		}
 		prev = r
 	}
 }
 
-// Len - returns length (in bytes) of ready string.
+// Len - returns length (in bytes) of whole filtered string, excluding unfiltered remainder part.
 func (b *Builder) Len() int {
-	return b.str.Len()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.message.Len() + b.draft.Len()
 }
 
-// Total - return total size in bytes of underlying data.
-// Total value may be grater than length of ready string.
-func (b *Builder) Total() int {
-	return b.Len() + b.reminder.Len()
+// MessageLen - returns length of filtered message. Values is always less or equals than whole length.
+func (b *Builder) MessageLen() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.message.Len()
 }
 
-// Flush - returns built string and resets internal builder
+// Flush - immediately returns the whole filtered string and resets all internal buffers.
 func (b *Builder) Flush() string {
-	defer b.str.Reset()
-	return b.str.String()
+	b.mu.Lock()
+	defer func() {
+		b.draft.Reset()
+		b.message.Reset()
+		b.mu.Unlock()
+	}()
+	if b.message.Len() > 0 && b.draft.Len() > 0 {
+		b.message.WriteByte('\n')
+	}
+	b.message.WriteString(b.draft.String())
+	return b.message.String()
+}
+
+// FlushMessage - returns filtered message without of the buffered remainder and resets message buffer.
+// The buffered string is became a message if builder meets Unix EOL in the unfiltered source.
+func (b *Builder) FlushMessage() string {
+	b.mu.Lock()
+	defer func() {
+		b.message.Reset()
+		b.mu.Unlock()
+	}()
+	return b.message.String()
 }
 
 // LastValidRune - return index and size in bytes of last well-encoded rune in given slice.

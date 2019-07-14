@@ -16,7 +16,7 @@ type Broker struct {
 	readTick,
 	writeTimeout time.Duration
 	packetSize, // min message size
-	completeSize int // max message size
+	bufSize int // max message size
 	inbox chan<- MessageEvent
 	join  chan<- JoinEvent
 	part  chan<- PartEvent
@@ -52,7 +52,7 @@ func New(options ...brokerOption) (*Broker, error) {
 		readTimeout:  60 * time.Second,
 		readTick:     100 * time.Millisecond,
 		writeTimeout: 60 * time.Second,
-		completeSize: 2048,
+		bufSize:      2048,
 		packetSize:   1500,
 		ctx:          ctx,
 		cancel:       cancel,
@@ -249,29 +249,59 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 	}
 
 	builder := message.Builder{}
-	buf := make([]byte, b.completeSize)
+	connErr := make(chan error, 1)
+
+	wg := sync.WaitGroup{}
+	defer wg.Done()
+	
+	wg.Add(1)
+	go func() {
+		/* connection reader */
+		defer func() {
+			close(connErr)
+			wg.Done()
+		}()
+		buf := make([]byte, b.bufSize)
+		for {
+			conn.SetReadDeadline(time.Now().Add(b.readTimeout))
+			n, err := conn.Read(buf)
+			if n > 0 {
+				builder.Write(buf[:n])
+			}
+			if err != nil {
+				connErr <- err
+				return
+			}
+			select {
+			case <-b.ctx.Done():
+				return
+			default:
+			}
+		}
+
+	}()
+
 	ticker := time.NewTicker(b.readTick)
 	defer ticker.Stop()
 	for {
-		conn.SetReadDeadline(time.Now().Add(b.readTimeout))
-		n, err := conn.Read(buf)
-		if n > 0 {
-			builder.Write(buf[:n])
-		}
 		select {
 		case <-ticker.C:
+			// partial message
 			if builder.Len() >= b.packetSize {
 				b.notifyInboundMessage(conn, builder.Flush())
 			}
 		default:
-			if builder.Len() >= b.completeSize {
+			// TODO check there are complete messages in builder/buffer
+			if builder.Len() >= b.packetSize {
 				b.notifyInboundMessage(conn, builder.Flush())
 			}
 		}
+
 		select {
-		case <-ctx.Done():
-			return
-		default:
+		case err, ok := <-connErr:
+			if !ok {
+				return
+			}
 			if err == nil {
 				continue
 			}
@@ -288,6 +318,13 @@ func (b *Broker) maintainInbox(ctx context.Context, conn net.Conn) {
 				b.notifyPart(conn, PartActionLeft)
 				return
 			}
+		default:
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
 	}
 }
