@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/wtask/chat/internal/chat"
@@ -45,7 +46,8 @@ func main() {
 	logger.Println("Chat server has started.")
 
 	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt, os.Kill)
+	// use SIGTERM to gracefully stop server inside docker container
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
 
 	logger.Println("Got stop signal")

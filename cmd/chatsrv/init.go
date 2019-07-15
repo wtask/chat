@@ -43,7 +43,7 @@ var (
 	BinaryName = strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0]))
 
 	// Version - app version fingerprint
-	Version = semver.V{Minor: 3, Patch: 1, PreRelease: "beta"}.String()
+	Version = semver.V{Minor: 3, Patch: 1, PreRelease: ""}.String()
 )
 
 func init() {
