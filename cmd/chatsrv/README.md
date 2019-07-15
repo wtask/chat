@@ -66,7 +66,7 @@ Options:
 
 ## Chat client
 
-You may use `neycat`, `telnet` or similar utilities as chat clients. For example, run this command to connect to the chat server with `netcat` locally:
+You may use `netcat`, `telnet` or similar utilities as chat clients. For example, run this command to connect to the chat server with `netcat` locally:
 
 ```CLI
 nc localhost 20000
