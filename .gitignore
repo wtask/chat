@@ -4,6 +4,7 @@
 
 # Debug binaries
 debug
+__debug_bin
 
 # Binaries for programs and plugins
 *.exe

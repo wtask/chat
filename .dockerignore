@@ -1,0 +1,31 @@
+# IDE data and plugins
+.idea
+.vscode
+.history
+
+.git
+**/.gitignore
+
+**/*.Dockerfile
+
+# do makenot add/copy tests from context
+**/*_test.go
+
+# Debug binaries
+**/debug
+
+# Binaries for programs and plugins
+**/*.exe
+**/*.exe~
+**/*.dll
+**/*.so
+**/*.dylib
+
+# Test binary, build with `go test -c`
+**/*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+**/*.out
+
+# Markdown docs are not used when building
+**/*.md
