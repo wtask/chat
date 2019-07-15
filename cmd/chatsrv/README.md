@@ -6,7 +6,7 @@ Text chat server over TCP connections.
 
 To build server locally by your own you need to install [Golang](https://golang.org/) distribution for your platform.
 
-Or you may use ready [Docker](https://www.docker.com/) image of the chat server. In that case you need to install _docker_, see image link below.
+Or you may use ready [Docker](https://www.docker.com/) image of the chat server. In that case you need to install _docker_. See server image link below.
 
 ## Compile
 
@@ -30,7 +30,7 @@ go run .
 
 1. Check this repository to select available server images: https://cloud.docker.com/u/wtask/repository/docker/wtask/chatsrv
 
-2. Run server as docker container:
+2. Run server in docker container:
 
 ```CLI
 docker run -d --rm -p 20000:20000 --name tcpchat wtask/chat:x.y.z
@@ -42,7 +42,7 @@ where:
 
 ## CLI options
 
-Run server with option `-help` to get help for available server options
+Run server binary with option `-help` to get help for available options:
 
 ```CLI
 chatsrv -help
@@ -62,4 +62,12 @@ Options:
         Listen address
   -port uint
         Listen port (default 20000)
+```
+
+## Chat client
+
+You may use `neycat`, `telnet` or similar utilities as chat clients. For example, run this command to connect to the chat server with `netcat` locally:
+
+```CLI
+nc localhost 20000
 ```
