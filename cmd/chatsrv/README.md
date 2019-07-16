@@ -6,7 +6,7 @@ Text chat server over TCP.
 
 To build server locally by your own you need to install [Golang](https://golang.org/) distribution for your platform.
 
-Or you may use ready [Docker](https://www.docker.com/) image of the chat server. In that case you need to install _docker_. See server image link below.
+Or you may use ready _docker image_ of the chat server. In that case you need to install [Docker](https://www.docker.com/). See server image link below.
 
 ## Compile
 
