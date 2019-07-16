@@ -1,6 +1,6 @@
 # Chat
 
-Text chat over __standard__ Golang net.Listener/net.Conn __interfaces__. The code is based only on Golang standard library and built around internal chat broker. The broker is a core as for chat-server and as far as for a chat client.
+Text chat over __standard__ Golang net.Listener/net.Conn __interfaces__. The code is based only on Golang standard library and built around of internal chat broker. The broker is a core as for chat-server and as far as for a chat client.
 
 Chat server:
 
