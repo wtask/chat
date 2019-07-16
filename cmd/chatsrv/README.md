@@ -1,6 +1,6 @@
 # chatsrv
 
-Text chat server over TCP connections.
+Text chat server over TCP.
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ go run .
 
 ## Docker image
 
-1. Check this repository to select available server images: https://cloud.docker.com/u/wtask/repository/docker/wtask/chatsrv
+1. Check [docker hub](https://hub.docker.com/r/wtask/chat) to select available server images: https://hub.docker.com/r/wtask/chat
 
 2. Run server in docker container:
 
@@ -38,7 +38,7 @@ docker run -d --rm -p 20000:20000 --name tcpchat wtask/chat:x.y.z
 
 where:
 * `20000` is a chat server port
-* `wtask/chat:x.y.z` is an available docker image.
+* `wtask/chat:x.y.z` is an available docker image (https://hub.docker.com/r/wtask/chat/tags).
 
 ## CLI options
 
