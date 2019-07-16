@@ -76,8 +76,6 @@ func WithReadTick(tick time.Duration) brokerOption {
 }
 
 // WithBufferSize - overwrites default parameters for buffering of incoming messages.
-// If the size of message in buffer exceeds packet size on every read tick
-// OR equals to complete size just after reading, so it will be send into inbox channel.
 func WithBufferSize(size int) brokerOption {
 	return func(b *Broker) error {
 		if size <= 0 {
